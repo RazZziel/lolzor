@@ -133,7 +133,7 @@ sub work {
 
         $_[2]($response->content, $_[3]);
 
-        #$browser->get($bandbattle.'/manager/increase/attack_up',@header);#ololo
+        $browser->get($bandbattle.'/manager/increase/attack_up',@header);#ololo
         $cookie_jar->save();
         sleep $_[1]*60;
     }
