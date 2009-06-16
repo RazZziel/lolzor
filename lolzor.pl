@@ -20,7 +20,6 @@ our $browser;
 our @header = ('Referer'=>'http://www.facebook.com', 'User-Agent'=>$user_agent);
 
 
-
 sub test {
     open(DURR,"fbDump.htm");
     return join("",<DURR>);
@@ -36,13 +35,13 @@ sub damp {
 
 sub login {
     print "¯\\(°_o)/¯·oO(email) ";
-    $email = <>; #read the login e-mail
+    $email = <STDIN>;
     print "¯\\(°_o)/¯·oO(pass)  ";
     ReadMode('noecho');
-    $password = <>; #read the password
+    $password = <STDIN>;
     ReadMode('normal');
 
-    chomp($email); #remove last line
+    chomp($email);
     chomp($password);
 
     my %postLoginData; #necessary post data for login
@@ -87,7 +86,7 @@ sub attack {
     $response = $browser->post($bandbattle.'/battle/battle',\%postData,@header);
     $response = $browser->get($bandbattle,@header);
 
-    damp($response->content);
+    #damp($response->content);
 
     print '['.$_[0].' ('.$_[1].')] ', $response->content =~ m#<span style="color: (?:\#253a10|rgb\(91,\ 24,\ 38\)); font-weight: bold;">([^<]+)</span>#i, "\n";
 }
@@ -134,17 +133,56 @@ sub thr_attack {
 
 sub thr_do {
     work( $bandbattle.'/user_items/do/'.$_[0],
-          $_[1]*5/10,
+          $_[1]*5/27,
           sub {
+              #damp($_[0]);
               print '['.$_[1].'] ', $_[0] =~ m#<div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">(?:[^<]+?)</div>([^<]+?)</div>#si, "\n";
           },
           @_ );
 }
 
+sub stats() {
+    sub stats_promote() {
+        print "Promote\n";
+        $response = $browser->get( $bandbattle.'/promote', @header );
+        @name = $response->content =~ m#<div style="font-size: 130%;">([^<]+)</div>#ig;
+        @price = $response->content =~ m#Price: \$([,0-9]+)#ig;
+        @mph = $response->content =~ m#Money per hour: \$([,0-9]+)#ig;
+        printf "\t %-20s %15s↓↓\n", '', 'price/mph';
+        for($i = 0; $i < scalar(@price); $i++) {
+            $price[$i] =~ s/,//g;
+            $mph[$i] =~ s/,//g;
+            printf "\t %-20s %15.f\n", $name[$i], $price[$i]/$mph[$i];
+        }
+    }
+    sub stats_travel() {
+        print "Travel\n";
+        $response = $browser->get( $bandbattle.'/travel_items', @header );
+        @name = $response->content =~ m#<div style="font-size: 130%;">([^<]+)</div>#ig;
+        @price = $response->content =~ m#Price: \$([,0-9]+)#ig;
+        @mph = $response->content =~ m#Money per hour: \$([,0-9]+)#ig;
+        @energy = $response->content =~ m#Energy every 5 minutes: ([0-9]+)#ig;
+        printf "\t %-20s %15s↓↓ %13s↓↓\n", '', 'price/energy', 'mph/energy';
+        for($i = 0; $i < scalar(@price); $i++) {
+            $price[$i] =~ s/,//g;
+            $mph[$i] =~ s/,//g;
+            printf "\t %-20s %15.f %15.f\n", $name[$i], $price[$i]/$energy[$i], $mph[$i]/$energy[$i];
+        }
+    }
+
+    stats_promote();
+    stats_travel();
+    exit;
+}
+
 
 login();
 
-#async { thr_attack(); };
+if ( @ARGV > 0 ) {
+    GetOptions( 'stats' => stats() );
+}
+
+async { thr_attack(); };
 
 #async { thr_do( 4, 10); }; #street
 #async { thr_do(11, 15); }; #park
@@ -153,8 +191,9 @@ login();
 #async { thr_do(14, 30); }; #opener
 #async { thr_do(30, 40); }; #ship
 #async { thr_do(31, 45); }; #opening
-async { thr_do(53, 50); }; #big
+#async { thr_do(53, 50); }; #big
 #async { thr_do(54, 75); }; #tour
+async { thr_do(55, 75); }; #red
 
 #async { thr_do( 1,  5); }; #practice
 #async { thr_do( 2, 15); }; #jam
