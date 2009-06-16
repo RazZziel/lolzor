@@ -1,21 +1,23 @@
 #!/usr/bin/perl
 
-#use strict;
 use warnings;
 use LWP::Simple;
 use LWP::UserAgent;
 use Crypt::SSLeay;
 use HTTP::Cookies;
 use Term::ReadKey;
+use Term::ANSIColor;
+use Term::ANSIColor qw(:constants);
 use threads ( 'yield',
               'stack_size' => 64*4096,
               'exit' => 'threads_only',
               'stringify' );
 
 my $bandbattle = 'http://apps.facebook.com/bandbattle';
-our $browser;
-our @header = ( 'Referer'    => 'http://www.facebook.com',
-                'User-Agent' => 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2a1pre) Gecko/20090604 Minefield/3.6a1pre' );
+my $browser;
+my @header = ( 'Referer'    => 'http://www.facebook.com',
+               'User-Agent' => 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2a1pre) Gecko/20090604 Minefield/3.6a1pre' );
+$Term::ANSIColor::AUTORESET = 1;
 
 
 sub test {
@@ -30,7 +32,7 @@ sub damp {
 }
 
 sub login {
-    our $cookie_jar = HTTP::Cookies->new(file=>'fbCookies.dat',autosave=>0, ignore_discard=>1);
+    our $cookie_jar = HTTP::Cookies->new(file=>'fbCookies.dat',autosave=>1, ignore_discard=>1);
     $browser = LWP::UserAgent->new;
     $browser->cookie_jar($cookie_jar);
 
@@ -57,7 +59,6 @@ sub login {
     }
 
     $response = $browser->get($bandbattle, @header);
-    damp($response->content);
 
     if($response->content =~ /Sign up and use Battle of the Bands on Facebook/)
     {
@@ -72,29 +73,42 @@ sub login {
 
 
 sub attack {
-    @names = $_[2] =~ m#name="([^"]+)"#sgi;
-    @values = $_[2] =~ m#value="([^"]+)"#sgi;
+    @names = $_[2] =~ /name="([^"]+)"/sgi;
+    @values = $_[2] =~ /value="([^"]+)"/sgi;
 
     my %postData;
     for($i = 0; $i < scalar(@names); $i++) {
         $postData{$names[$i]} = $values[$i];
     }
 
-    $response = $browser->post($bandbattle.'/battle/battle',\%postData,@header);
-    $response = $browser->get($bandbattle,@header);
+    $browser->post($bandbattle.'/battle/battle', \%postData, @header);
+    my $response = $browser->get($bandbattle, @header);
 
-    #damp($response->content);
+    $response->content =~ m/(You (won|lost|do not) (?:[^<]+))/;
+    my $msg = $1;
 
-    print '['.$_[0].' ('.$_[1].')] ', $response->content =~ m#<span style="color: (?:\#253a10|rgb\(91,\ 24,\ 38\)); font-weight: bold;">([^<]+)</span>#i, "\n";
+    print '[', CYAN, $_[0].' ('.$_[1].')', RESET, '] ';
+
+    $g = GREEN;
+    $r = RED;
+    $y = YELLOW;
+    $r = RESET;
+    for ($msg) {
+        s/(won)/$g$1$r/;
+        s/(lost)/$r$1$r/;
+        s/enough (stamina)/enough $y$1$r/;
+    }
+
+    print $msg, RESET, "\n";
 }
 
 sub find_weakest_band {
     my @min = (0, 999, "");
     @matches = $_[0] =~ m#<tr>(?:[^<]*)
-                        <td>([^<]+)</td>(?:[^<]*)
-                        <td>(?:[^<]+)</td>(?:[^<]*)
-                        <td>([^<]+)\ other\ bands</td>(?:[^<]*)
-                        <td>(?:[^<]*)<form(.*?)</form>#xsgi;
+                          <td>([^<]+)</td>(?:[^<]*)
+                          <td>(?:[^<]+)</td>(?:[^<]*)
+                          <td>([^<]+)\ other\ bands</td>(?:[^<]*)
+                          <td>(?:[^<]*)<form(.*?)</form>#xsgi;
 
     for ($count = 0; $count < scalar(@matches); $count+=3) {
         if ($matches[$count+1] < $min[1]) {
@@ -111,9 +125,16 @@ sub work {
     while (1) {
         $response = $browser->get($_[0],@header);
 
+        print '[',
+              BOLD, BLUE, $response->content =~ /Energy: ([0-9]+)/i, RESET,
+              '|',
+              BOLD, BLUE, $response->content =~ /Money: \$([,0-9]+)/i, RESET,
+              ']';
+
         $_[2]($response->content, $_[3]);
 
-        $browser->get($bandbattle.'/manager/increase/attack_up',@header);#ololo
+        #$browser->get($bandbattle.'/manager/increase/attack_up',@header);#ololo
+        $cookie_jar->save();
         sleep $_[1]*60;
     }
 }
@@ -130,10 +151,9 @@ sub thr_attack {
 
 sub thr_do {
     work( $bandbattle.'/user_items/do/'.$_[0],
-          $_[1]*5/31,
+          $_[1]*5/36,
           sub {
-              #damp($_[0]);
-              print '['.$_[1].'] ', $_[0] =~ m#<div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">(?:[^<]+?)</div>([^<]+?)</div>#si, "\n";
+              print ' ', $_[0] =~ m#<div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">(?:[^<]+?)</div>([^<]+?)</div>#si, "\n";
           },
           @_ );
 }
@@ -206,5 +226,6 @@ $_->join() foreach threads->list(threads::all);
 #/bandbattle/manager/increase/max_energy
 #/bandbattle/manager/increase/max_health
 #/bandbattle/manager/increase/max_stamina
+
 #<div class="flash"><div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">This amp goes up to 11.</div>The value was increased</div>
 #<div class="flash">(...)You have 3 experience points, use them to increase your bands attack, defense, max stamina, or max energy.(...)</div>
