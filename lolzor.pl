@@ -7,17 +7,15 @@ use LWP::UserAgent;
 use Crypt::SSLeay;
 use HTTP::Cookies;
 use Term::ReadKey;
-use threads ('yield',
-             'stack_size' => 64*4096,
-             'exit' => 'threads_only',
-             'stringify');
+use threads ( 'yield',
+              'stack_size' => 64*4096,
+              'exit' => 'threads_only',
+              'stringify' );
 
-my $email; #stores our mail
-my $password; #stores our password
-my $user_agent = 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2a1pre) Gecko/20090604 Minefield/3.6a1pre';
-my $bandbattle = "http://apps.facebook.com/bandbattle";
+my $bandbattle = 'http://apps.facebook.com/bandbattle';
 our $browser;
-our @header = ('Referer'=>'http://www.facebook.com', 'User-Agent'=>$user_agent);
+our @header = ( 'Referer'    => 'http://www.facebook.com',
+                'User-Agent' => 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2a1pre) Gecko/20090604 Minefield/3.6a1pre' );
 
 
 sub test {
@@ -31,45 +29,44 @@ sub damp {
     close(DERP);
 }
 
-
-
 sub login {
-    print "¯\\(°_o)/¯·oO(email) ";
-    $email = <STDIN>;
-    print "¯\\(°_o)/¯·oO(pass)  ";
-    ReadMode('noecho');
-    $password = <STDIN>;
-    ReadMode('normal');
-
-    chomp($email);
-    chomp($password);
-
-    my %postLoginData; #necessary post data for login
-    $postLoginData{'email'}=$email;
-    $postLoginData{'pass'}=$password;
-    $postLoginData{'persistent'}=1;
-    $postLoginData{'login'}='Login';
-
-    our $response; #holds the response the HTTP requests
-
-    our $cookie_jar = HTTP::Cookies->new(file=>'fbCookies.dat',autosave=>1, ignore_discard=>1);
-
-    $browser = LWP::UserAgent->new; #init browser
+    our $cookie_jar = HTTP::Cookies->new(file=>'fbCookies.dat',autosave=>0, ignore_discard=>1);
+    $browser = LWP::UserAgent->new;
     $browser->cookie_jar($cookie_jar);
 
-    $response = $browser->get('http://www.facebook.com/login.php',@header);
+    unless (-e 'fbCookies.dat') {
+        print "¯\\(°_o)/¯·oO(email) ";
+        my $email = <STDIN>;
+        print "¯\\(°_o)/¯·oO(pass)  ";
+        ReadMode('noecho');
+        my $password = <STDIN>;
+        ReadMode('normal');
 
-    #here we actually login!
-    $response = $browser->post('https://login.facebook.com/login.php',\%postLoginData,@header);
+        chomp($email);
+        chomp($password);
 
-    #was login successful?
-    if($response->content =~ /Incorrect Email/)
+        my %postLoginData;
+        $postLoginData{'email'}      = $email;
+        $postLoginData{'pass'}       = $password;
+        $postLoginData{'persistent'} = 1;
+        $postLoginData{'login'}      = 'Login';
+
+        # login
+        $response = $browser->get('http://www.facebook.com/login.php', @header);
+        $browser->post('https://login.facebook.com/login.php', \%postLoginData, @header);
+    }
+
+    $response = $browser->get($bandbattle, @header);
+    damp($response->content);
+
+    if($response->content =~ /Sign up and use Battle of the Bands on Facebook/)
     {
         print "Login Failed...Quitting..\n";
         exit;
     }
 
     print "..and we are in!\n";
+    $cookie_jar->save();
 }
 
 
@@ -133,7 +130,7 @@ sub thr_attack {
 
 sub thr_do {
     work( $bandbattle.'/user_items/do/'.$_[0],
-          $_[1]*5/27,
+          $_[1]*5/31,
           sub {
               #damp($_[0]);
               print '['.$_[1].'] ', $_[0] =~ m#<div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">(?:[^<]+?)</div>([^<]+?)</div>#si, "\n";
@@ -203,7 +200,7 @@ async { thr_do(55, 75); }; #red
 #async { thr_do(39,100); }; #compose
 #async { thr_do(40,200); }; #producer
 
-$_->join() foreach threads->list(threads::running);
+$_->join() foreach threads->list(threads::all);
 #/bandbattle/manager/increase/attack_up
 #/bandbattle/manager/increase/defense_up
 #/bandbattle/manager/increase/max_energy
