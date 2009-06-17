@@ -21,12 +21,12 @@ $Term::ANSIColor::AUTORESET = 1;
 
 
 sub test {
-    open(DURR,"fbDump.htm");
-    return join("",<DURR>);
+    open(DURR,'fbDump.htm');
+    return join('',<DURR>);
 }
 
 sub damp {
-    open(DERP, '>fbDump.htm');
+    open(DERP, '>fbDump-'.time().'.htm');
     print DERP $_[0];
     close(DERP);
 }
@@ -87,16 +87,23 @@ sub attack {
     $response->content =~ m/(You (won|lost|do not) (?:[^<]+))/;
     my $msg = $1;
 
-    print '[', CYAN, $_[0].' ('.$_[1].')', RESET, '] ';
+    damp($msg."\n--------------\n".$response->content) unless (length($msg) > 15);
 
     $g = GREEN;
-    $r = RED;
+    $m = RED;
     $y = YELLOW;
+    $c = CYAN;
     $r = RESET;
+    for ($_[0]) {
+        s/\(/\\\(/;
+        s/\)/\\\)/;
+        s/\//\\\//;
+    }
     for ($msg) {
         s/(won)/$g$1$r/;
-        s/(lost)/$r$1$r/;
-        s/enough (stamina)/enough $y$1$r/;
+        s/(lost)/$m$1$r/;
+        s/(enough )(stamina)/$1$y$2$r/;
+        s/($_[0])/$c$1 \($_[1]\)$r/;
     }
 
     print $msg, RESET, "\n";
@@ -123,17 +130,23 @@ sub find_weakest_band {
 
 sub work {
     while (1) {
-        $response = $browser->get($_[0],@header);
-
-        print '[',
-              BOLD, BLUE, $response->content =~ /Energy: ([0-9]+)/i, RESET,
-              '|',
-              BOLD, BLUE, $response->content =~ /Money: \$([,0-9]+)/i, RESET,
-              ']';
-
-        $_[2]($response->content, $_[3]);
-
         $browser->get($bandbattle.'/manager/increase/attack_up',@header);#ololo
+        $response = $browser->get($_[0], @header);
+
+        unless ($response->content =~ m/500 read failed/) {
+            print '[',
+              ($response->content =~ m/You have ([0-9]+) experience points/ ? GREEN : BLUE),
+              BOLD, BLUE, $response->content =~ m/Fame Level: ([0-9]+)/, RESET,
+              ($response->content =~ m/The value was increased/ ? GREEN.'↑↑'.RESET : ''),
+              '|',
+              BOLD, BLUE, $response->content =~ m/Energy: ([0-9]+)/, RESET,
+              '|',
+              BOLD, BLUE, $response->content =~ m/Money: \$([,0-9]+)/, RESET,
+              '] ';
+
+              $_[2]($response->content, $_[3]);
+        }
+
         $cookie_jar->save();
         sleep $_[1]*60;
     }
@@ -153,7 +166,8 @@ sub thr_do {
     work( $bandbattle.'/user_items/do/'.$_[0],
           $_[1]*5/36,
           sub {
-              print ' ', $_[0] =~ m#<div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">(?:[^<]+?)</div>([^<]+?)</div>#si, "\n";
+              $_[0] =~ s/could not played/could not play/; # FFFFFFFFFFFF.
+              print $_[0] =~ m#<div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">(?:[^<]+?)</div>([^<]+?)</div>#si, "\n";
           },
           @_ );
 }
@@ -211,6 +225,7 @@ async { thr_attack(); };
 #async { thr_do(53, 50); }; #big
 #async { thr_do(54, 75); }; #tour
 async { thr_do(55, 75); }; #red
+#async { thr_do(63, 100); }; #club88
 
 #async { thr_do( 1,  5); }; #practice
 #async { thr_do( 2, 15); }; #jam
