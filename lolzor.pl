@@ -84,7 +84,7 @@ sub attack {
     $browser->post($bandbattle.'/battle/battle', \%postData, @header);
     my $response = $browser->get($bandbattle, @header);
 
-    $response->content =~ m/(You (won|lost|do not) (?:[^<]+))/;
+    return unless $response->content =~ m/(You (won|lost|do not) (?:[^<]+))/;
     my $msg = $1;
 
     my ($money, $skill) = (0, 0);
