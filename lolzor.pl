@@ -87,6 +87,13 @@ sub attack {
     $response->content =~ m/(You (won|lost|do not) (?:[^<]+))/;
     my $msg = $1;
 
+    my ($money, $skill) = (0, 0);
+    if ($response->content =~ m/You gained \$([0-9]+) and ([0-9]+) skill points/) {
+        ($money, $skill) = ($1, $2);
+    } elsif ($response->content =~ m/You lost \$([0-9]+)/) {
+        ($money, $skill) = (-$1, 0);
+    }
+
     damp($msg."\n--------------\n".$response->content) unless (length($msg) > 15);
 
     $g = GREEN;
@@ -106,7 +113,7 @@ sub attack {
         s/($_[0])/$c$1 \($_[1]\)$r/;
     }
 
-    print $msg, RESET, "\n";
+    print "($money,$skill) $msg", RESET, "\n";
 }
 
 sub find_weakest_band {
