@@ -6,6 +6,7 @@ use LWP::UserAgent;
 use Crypt::SSLeay;
 use HTTP::Cookies;
 use Term::ReadKey;
+use Getopt::Long;
 use Term::ANSIColor;
 use Term::ANSIColor qw(:constants);
 use threads ( 'yield',
@@ -19,6 +20,12 @@ my $browser;
 my @header = ( 'Referer'    => 'http://www.facebook.com',
                'User-Agent' => 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2a1pre) Gecko/20090604 Minefield/3.6a1pre' );
 $Term::ANSIColor::AUTORESET = 1;
+
+$g = GREEN;
+$m = RED;
+$y = YELLOW;
+$c = CYAN;
+$r = RESET;
 
 sub test {
     open(DURR,'fbDump.htm');
@@ -75,8 +82,6 @@ sub login {
 sub attack {
     my ($band_name, $band_tour, $band_form) = @_;
 
-    return unless $band_tour < 5; # ayayay
-
     my @names = $band_form =~ /name="([^"]+)"/sgi;
     my @values = $band_form =~ /value="([^"]+)"/sgi;
 
@@ -116,6 +121,12 @@ sub scan_messages {
 
     sub message {
         my ($content, $msg) = @_;
+        for ($msg) {
+            s/(won)/$g$1$r/;
+            s/(lost)/$m$1$r/;
+            s/(enough )([a-z]+)/$1$y$2$r/;
+            s/(gained \$)([,0-9]+)( and )([0-9]+)( skill)/$1$g$2$r$3$g$4$r$5/;
+        }
         print '[',
            ($content =~ m/You have ([0-9]+) experience points/i ? GREEN : BLUE),
            BOLD, BLUE, $content =~ m/Fame Level: ([0-9]+)/, RESET,
@@ -149,17 +160,9 @@ sub scan_messages {
         if ($band_name) {
             $band_name =~ s/(\(|\)|\[|\]|\/|\\|\*|\.)/\\$1/;
 
-            $g = GREEN;
-            $m = RED;
-            $y = YELLOW;
-            $c = CYAN;
-            $r = RESET;
             for ($msg) {
-                s/(won)/$g$1$r/;
-                s/(lost)/$m$1$r/;
-                s/(enough )([a-z]+)/$1$y$2$r/;
-                s/($band_name)/$c$1 \($band_tour\)$r/;
                 s/ \([^)]+\)//;
+                s/($band_name)/$c$1 \($band_tour\)$r/;
             }
         }
         message( $content, ($money ? "($money,$skill) " : '')."$msg" );
@@ -216,7 +219,8 @@ sub thr_attack {
 }
 
 sub thr_do {
-    my ($action, $energy) = @_;
+    my ($action, $energy) = ($_[0][0], $_[0][1]);
+
     work( $bandbattle.'/user_items/do/'.$action,
           $energy*5/36,
           sub {},
@@ -257,33 +261,42 @@ sub stats() {
     exit;
 }
 
+our %user_items = (
+    'street'   => [ 4,  10],
+    'park'     => [11,  15],
+    'bar'      => [12,  20],
+    'casino'   => [13,  25],
+    'opener'   => [14,  30],
+    'ship'     => [30,  40],
+    'opening'  => [31,  45],
+    'big'      => [53,  50],
+    'mtour'    => [54,  75],
+    'red'      => [55,  75],
+    'club88'   => [63, 100],
+    'wtour'    => [ 6, 150],
+
+    'practice' => [ 1,   5],
+    'jam'      => [ 2,  15],
+    'lesson'   => [ 3,  20],
+    'plesson'  => [ 9,  30],
+    'garage'   => [10,  40],
+    'compose'  => [39, 100],
+    'producer' => [40, 200]
+    );
+
+our $attack = 0;
+our @actions = ();
 
 login();
 
 if ( @ARGV > 0 ) {
-    GetOptions( 'stats' => stats() );
+    GetOptions( 'stats'  => sub { stats(); },
+                'attack' => \$attack,
+                'do=s'   => \@actions );
 }
+async { thr_attack(); } if ($attack);
+async { thr_do($user_items{$_}) if exists $user_items{$_}; } foreach @actions;
 
-async { thr_attack(); };
 
-#async { thr_do( 4, 10); }; #street
-#async { thr_do(11, 15); }; #park
-#async { thr_do(12, 20); }; #bar
-#async { thr_do(13, 25); }; #casino
-#async { thr_do(14, 30); }; #opener
-#async { thr_do(30, 40); }; #ship
-#async { thr_do(31, 45); }; #opening
-#async { thr_do(53, 50); }; #big
-#async { thr_do(54, 75); }; #tour
-#async { thr_do(55, 75); }; #red
-async { thr_do(63, 100); }; #club88
-
-#async { thr_do( 1,  5); }; #practice
-#async { thr_do( 2, 15); }; #jam
-#async { thr_do( 3, 20); }; #lesson
-#async { thr_do( 9, 30); }; #pro lesson
-#async { thr_do(10, 40); }; #garage jam
-#async { thr_do(39,100); }; #compose
-#async { thr_do(40,200); }; #producer
 
 $_->join() foreach threads->list(threads::all);
