@@ -199,7 +199,7 @@ sub work {
         $response = $browser->get($bandbattle.'/index/clear', @header);
         scan_messages($response->content);
 
-        $response = $browser->get($url, @header);# until $response->content !~ m/500 read failed/;
+        do { $response = $browser->get($url, @header) } until $response->content !~ m/500 read failed/;
         scan_messages($response->content);
 
         $_[2]($response->content, $function_param);
@@ -286,12 +286,9 @@ our %user_items = (
     'producer' => [40, 200]
     );
 
-our $attack = 0;
-our @actions = ();
-
-login();
-
-our @options = ();
+my $attack = 0;
+my @actions = ();
+my $options = "";
 
 if ( @ARGV > 0 ) {
     $options = join(' ', @ARGV);
@@ -303,6 +300,8 @@ if ( @ARGV > 0 ) {
     $options = join(' ', <DURR>);
     close(DURR);
 }
+
+login();
 
 GetOptionsFromString( $options,
                       'stats'  => sub { stats(); },
