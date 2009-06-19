@@ -6,7 +6,7 @@ use LWP::UserAgent;
 use Crypt::SSLeay;
 use HTTP::Cookies;
 use Term::ReadKey;
-use Getopt::Long;
+use Getopt::Long qw(GetOptionsFromString);
 use Term::ANSIColor;
 use Term::ANSIColor qw(:constants);
 use threads ( 'yield',
@@ -29,7 +29,9 @@ $r = RESET;
 
 sub test {
     open(DURR,'fbDump.htm');
-    return join('',<DURR>);
+    $fff = join('',<DURR>);
+    close(DURR);
+    return $fff;
 }
 
 sub damp {
@@ -289,11 +291,24 @@ our @actions = ();
 
 login();
 
+our @options = ();
+
 if ( @ARGV > 0 ) {
-    GetOptions( 'stats'  => sub { stats(); },
-                'attack' => \$attack,
-                'do=s'   => \@actions );
+    $options = join(' ', @ARGV);
+    open(DERP, '>lolzor.conf');
+    print DERP $options;
+    close(DERP);
+} else {
+    open(DURR,'lolzor.conf');
+    $options = join(' ', <DURR>);
+    close(DURR);
 }
+
+GetOptionsFromString( $options,
+                      'stats'  => sub { stats(); },
+                      'attack' => \$attack,
+                      'do=s'   => \@actions );
+
 async { thr_attack(); } if ($attack);
 async { thr_do($user_items{$_}) if exists $user_items{$_}; } foreach @actions;
 
