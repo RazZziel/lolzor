@@ -13,12 +13,12 @@ use threads ( 'yield',
               'exit' => 'threads_only',
               'stringify' );
 
+
 my $bandbattle = 'http://apps.facebook.com/bandbattle';
 my $browser;
 my @header = ( 'Referer'    => 'http://www.facebook.com',
                'User-Agent' => 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2a1pre) Gecko/20090604 Minefield/3.6a1pre' );
 $Term::ANSIColor::AUTORESET = 1;
-
 
 sub test {
     open(DURR,'fbDump.htm');
@@ -73,8 +73,12 @@ sub login {
 
 
 sub attack {
-    @names = $_[2] =~ /name="([^"]+)"/sgi;
-    @values = $_[2] =~ /value="([^"]+)"/sgi;
+    my ($band_name, $band_tour, $band_form) = @_;
+
+    return unless $band_tour < 5; # ayayay
+
+    my @names = $band_form =~ /name="([^"]+)"/sgi;
+    my @values = $band_form =~ /value="([^"]+)"/sgi;
 
     my %postData;
     for($i = 0; $i < scalar(@names); $i++) {
@@ -82,47 +86,19 @@ sub attack {
     }
 
     $browser->post($bandbattle.'/battle/battle', \%postData, @header);
-    my $response = $browser->get($bandbattle, @header);
+    $response = $browser->get($bandbattle, @header);
 
-    return unless $response->content =~ m/(You (won|lost|do not) (?:[^<]+))/;
-    my $msg = $1;
-
-    my ($money, $skill) = (0, 0);
-    if ($response->content =~ m/You gained \$([0-9]+) and ([0-9]+) skill points/) {
-        ($money, $skill) = ($1, $2);
-    } elsif ($response->content =~ m/You lost \$([0-9]+)/) {
-        ($money, $skill) = (-$1, 0);
-    }
-
-    damp($msg."\n--------------\n".$response->content) unless (length($msg) > 15);
-
-    $g = GREEN;
-    $m = RED;
-    $y = YELLOW;
-    $c = CYAN;
-    $r = RESET;
-    for ($_[0]) {
-        s/\(/\\\(/;
-        s/\)/\\\)/;
-        s/\//\\\//;
-    }
-    for ($msg) {
-        s/(won)/$g$1$r/;
-        s/(lost)/$m$1$r/;
-        s/(enough )(stamina)/$1$y$2$r/;
-        s/($_[0])/$c$1 \($_[1]\)$r/;
-    }
-
-    print "($money,$skill) $msg", RESET, "\n";
+    scan_messages($response->content, $band_name, $band_tour);
 }
 
 sub find_weakest_band {
-    my @min = (0, 999, "");
-    @matches = $_[0] =~ m#<tr>(?:[^<]*)
-                          <td>([^<]+)</td>(?:[^<]*)
-                          <td>(?:[^<]+)</td>(?:[^<]*)
-                          <td>([^<]+)\ other\ bands</td>(?:[^<]*)
-                          <td>(?:[^<]*)<form(.*?)</form>#xsgi;
+    my ($content) = @_;
+    my @min = (0, 999, 0);
+    @matches = $content =~ m#<tr>[^<]*
+                             <td>([^<]+)</td>[^<]*
+                             <td>[^<]+</td>[^<]*
+                             <td>([^<]+)\ other\ bands</td>[^<]*
+                             <td>[^<]*<form(.*?)</form>#xsgi;
 
     for ($count = 0; $count < scalar(@matches); $count+=3) {
         if ($matches[$count+1] < $min[1]) {
@@ -135,27 +111,97 @@ sub find_weakest_band {
     return @min;
 }
 
-sub work {
-    while (1) {
-        $browser->get($bandbattle.'/manager/increase/attack_up',@header);#ololo
-        $response = $browser->get($_[0], @header);
+sub scan_messages {
+    my $content = shift;
 
-        unless ($response->content =~ m/500 read failed/) {
-            print '[',
-              ($response->content =~ m/You have ([0-9]+) experience points/ ? GREEN : BLUE),
-              BOLD, BLUE, $response->content =~ m/Fame Level: ([0-9]+)/, RESET,
-              ($response->content =~ m/The value was increased/ ? GREEN.'↑↑'.RESET : ''),
-              '|',
-              BOLD, BLUE, $response->content =~ m/Energy: ([0-9]+)/, RESET,
-              '|',
-              BOLD, BLUE, $response->content =~ m/Money: \$([,0-9]+)/, RESET,
-              '] ';
+    sub message {
+        my ($content, $msg) = @_;
+        print '[',
+           ($content =~ m/You have ([0-9]+) experience points/i ? GREEN : BLUE),
+           BOLD, BLUE, $content =~ m/Fame Level: ([0-9]+)/, RESET,
+           ($content =~ m/The value was increased/i ? GREEN.'↑↑'.RESET : ''),
+           '|',
+           BOLD, BLUE, $content =~ m/Energy: ([0-9]+)/, RESET,
+           '|',
+           BOLD, BLUE, $content =~ m/Money: \$([,0-9]+)/, RESET,
+           '] ',
+           $msg, RESET, "\n";
+    }
 
-              $_[2]($response->content, $_[3]);
+    if ($content =~ m/(You (played|practiced|could not) [^<]+)/i) {
+        $bleh = $1;
+        $bleh =~ s/could not played/could not play/; # FFFFFFFFFFFF.
+        message( $content, $bleh );
+    }
+
+    if ($content =~ m/(You (won|lost|(do|can) not) [^<]+)/) {
+        my $msg = $1;
+        my ($money, $skill) = (0, 0);
+
+        if ($content =~ m/You gained \$([0-9]+) and ([0-9]+) skill points/) {
+            ($money, $skill) = ($1, $2);
+        } elsif ($content =~ m/You lost \$([0-9]+)/) {
+            ($money, $skill) = (-$1, 0);
         }
 
+        my ($band_name, $band_tour) = @_;
+
+        if ($band_name) {
+            $band_name =~ s/(\(|\)|\[|\]|\/|\\|\*|\.)/\\$1/;
+
+            $g = GREEN;
+            $m = RED;
+            $y = YELLOW;
+            $c = CYAN;
+            $r = RESET;
+            for ($msg) {
+                s/(won)/$g$1$r/;
+                s/(lost)/$m$1$r/;
+                s/(enough )([a-z]+)/$1$y$2$r/;
+                s/($band_name)/$c$1 \($band_tour\)$r/;
+                s/ \([^)]+\)//;
+            }
+        }
+        message( $content, ($money ? "($money,$skill) " : '')."$msg" );
+    }
+
+    if ($content =~ m/You have(?: earned)? ([0-9]+) experience points/i ) {
+        for($i = 0; $i < $1; $i++) {
+            $target = (
+                #'attack_up'
+                #'defense_up'
+                'max_energy'
+                #'max_health'
+                #'max_stamina'
+                );
+            $browser->get($bandbattle.'/manager/increase/'.$target, @header);
+            message( $content, $target.' ↑↑' );
+            scan_messages($content);
+        }
+    }
+
+    if ($content =~ m/The value was increased/i) {
+        message( $content, '↑↑' );
+    }
+}
+
+sub work {
+    my ($url, $sleep_time, $function, $function_param) = @_;
+
+    while (1) {
+        # Clear shit before sending our command, so
+        # it doesn't mess message parsing up.
+        $response = $browser->get($bandbattle.'/index/clear', @header);
+        scan_messages($response->content);
+
+        $response = $browser->get($url, @header);# until $response->content !~ m/500 read failed/;
+        scan_messages($response->content);
+
+        $_[2]($response->content, $function_param);
+
         $cookie_jar->save();
-        sleep $_[1]*60;
+
+        sleep $sleep_time*60;
     }
 }
 
@@ -170,12 +216,10 @@ sub thr_attack {
 }
 
 sub thr_do {
-    work( $bandbattle.'/user_items/do/'.$_[0],
-          $_[1]*5/36,
-          sub {
-              $_[0] =~ s/could not played/could not play/; # FFFFFFFFFFFF.
-              print $_[0] =~ m#<div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">(?:[^<]+?)</div>([^<]+?)</div>#si, "\n";
-          },
+    my ($action, $energy) = @_;
+    work( $bandbattle.'/user_items/do/'.$action,
+          $energy*5/36,
+          sub {},
           @_ );
 }
 
@@ -231,8 +275,8 @@ async { thr_attack(); };
 #async { thr_do(31, 45); }; #opening
 #async { thr_do(53, 50); }; #big
 #async { thr_do(54, 75); }; #tour
-async { thr_do(55, 75); }; #red
-#async { thr_do(63, 100); }; #club88
+#async { thr_do(55, 75); }; #red
+async { thr_do(63, 100); }; #club88
 
 #async { thr_do( 1,  5); }; #practice
 #async { thr_do( 2, 15); }; #jam
@@ -243,11 +287,3 @@ async { thr_do(55, 75); }; #red
 #async { thr_do(40,200); }; #producer
 
 $_->join() foreach threads->list(threads::all);
-#/bandbattle/manager/increase/attack_up
-#/bandbattle/manager/increase/defense_up
-#/bandbattle/manager/increase/max_energy
-#/bandbattle/manager/increase/max_health
-#/bandbattle/manager/increase/max_stamina
-
-#<div class="flash"><div style="font-size: 90%; font-weight: bold; margin-bottom: 3px;">This amp goes up to 11.</div>The value was increased</div>
-#<div class="flash">(...)You have 3 experience points, use them to increase your bands attack, defense, max stamina, or max energy.(...)</div>
