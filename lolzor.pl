@@ -159,27 +159,24 @@ sub scan_messages {
 
         my ($band_name, $band_tour) = @_;
 
-        if ($band_name) {
-            $band_name =~ s/(\(|\)|\[|\]|\/|\\|\*|\.)/\\$1/;
-
-            for ($msg) {
-                s/ \([^)]+\)//;
-                s/($band_name)/$c$1 \($band_tour\)$r/;
-            }
+        for ($msg) {
+            s/ \([^)]+\)//;
+            s/(against) (.*) (taking)/$1 $c$2 \($band_tour\)$r $3/;
         }
+
         message( $content, ($money ? "($money,$skill) " : '')."$msg" );
     }
 
-    if ($content =~ m/You have(?: earned)? ([0-9]+) experience points/i ) {
+    if (0 and $content =~ m/You have(?: earned)? ([0-9]+) experience points/i ) {
         for($i = 0; $i < $1; $i++) {
             $target = (
-                #'attack_up'
+                'attack_up'
                 #'defense_up'
-                'max_energy'
+                #'max_energy'
                 #'max_health'
                 #'max_stamina'
                 );
-            $browser->get($bandbattle.'/manager/increase/'.$target, @header);
+            $browser->get($bandbattle.'/manager/increase/'.$target, @header); # turn into a post or some shit
             message( $content, $target.' ↑↑' );
             scan_messages($content);
         }
@@ -215,7 +212,10 @@ sub thr_attack {
     work( $bandbattle.'/battle',
           2,
           sub {
-              attack( find_weakest_band($_[0]) );
+              $_[0] =~ m/Confidence: ([0-9]+)/;
+              if ($1 > 20) {
+                  attack( find_weakest_band($_[0]) );
+              }
           },
           @_ );
 }
