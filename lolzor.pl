@@ -170,9 +170,9 @@ sub scan_messages {
     if (0 and $content =~ m/You have(?: earned)? ([0-9]+) experience points/i ) {
         for($i = 0; $i < $1; $i++) {
             $target = (
-                'attack_up'
+                #'attack_up'
                 #'defense_up'
-                #'max_energy'
+                'max_energy'
                 #'max_health'
                 #'max_stamina'
                 );
